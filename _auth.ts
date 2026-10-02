@@ -1,0 +1,16 @@
+import {env} from 'cloudflare:workers';
+export function db(){if(!env.DB)throw Error('Banco indisponível');return env.DB}
+export const COOKIE='__Host-agra_session';
+const encoder=new TextEncoder();
+export function sameOrigin(request:Request){const origin=request.headers.get('Origin');return !origin||origin===new URL(request.url).origin}
+export function emailNorm(value:unknown){return String(value||'').trim().toLowerCase()}
+export function bytesToHex(bytes:Uint8Array){return Array.from(bytes).map(x=>x.toString(16).padStart(2,'0')).join('')}
+export async function sha256(value:string){return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(value))))}
+export async function derive(password:string,salt:string){const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);return bytesToHex(new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt:encoder.encode(salt),iterations:100000,hash:'SHA-256'},key,256)))}
+export function safeEqual(a:string,b:string){if(a.length!==b.length)return false;let mismatch=0;for(let i=0;i<a.length;i++)mismatch|=a.charCodeAt(i)^b.charCodeAt(i);return mismatch===0}
+export function token(){return bytesToHex(crypto.getRandomValues(new Uint8Array(32)))}
+export function setCookie(response:Response,value:string){response.headers.append('Set-Cookie',`${COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000`);return response}
+export function clearCookie(response:Response){response.headers.append('Set-Cookie',`${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);return response}
+export async function createSession(accountId:string){const value=token(),hash=await sha256(value),now=new Date(),expires=new Date(now.getTime()+30*86400000).toISOString();await db().prepare('INSERT INTO auth_sessions(token_hash,account_id,expires_at,created_at) VALUES(?,?,?,?)').bind(hash,accountId,expires,now.toISOString()).run();return value}
+export async function getNativeSession(request:Request){const match=(request.headers.get('cookie')||'').match(/(?:^|;\s*)__Host-agra_session=([a-f0-9]{64})(?:;|$)/);if(!match)return null;const hash=await sha256(match[1]);return db().prepare(`SELECT a.id AS accountId,a.email,a.name,a.role,s.id AS storeId,s.name AS storeName FROM auth_sessions ss JOIN native_accounts a ON a.id=ss.account_id JOIN stores s ON s.id=a.store_id WHERE ss.token_hash=? AND ss.expires_at>?`).bind(hash,new Date().toISOString()).first<{accountId:string;email:string;name:string;role:string;storeId:string;storeName:string}>()}
+export async function throttle(key:string,max:number,windowMs:number){const now=new Date(),row=await db().prepare('SELECT attempts,window_start AS windowStart FROM auth_limits WHERE key=?').bind(key).first<{attempts:number;windowStart:string}>();if(row&&now.getTime()-new Date(row.windowStart).getTime()<windowMs){if(row.attempts>=max)return false;await db().prepare('UPDATE auth_limits SET attempts=attempts+1 WHERE key=?').bind(key).run();return true}await db().prepare('INSERT INTO auth_limits(key,attempts,window_start) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET attempts=1,window_start=excluded.window_start').bind(key,now.toISOString()).run();return true}

@@ -1,0 +1,2 @@
+// Indexed lookups describe completed discrepancies without loading product details.
+export const divergenceFlags=`CASE WHEN i.completed_at IS NOT NULL THEN EXISTS(SELECT 1 FROM invoice_items t WHERE t.invoice_id=i.id AND t.counted<t.expected) ELSE 0 END AS hasMissing,CASE WHEN i.completed_at IS NOT NULL THEN EXISTS(SELECT 1 FROM invoice_items t WHERE t.invoice_id=i.id AND t.counted>t.expected) ELSE 0 END AS hasSurplus,CASE WHEN i.completed_at IS NOT NULL THEN EXISTS(SELECT 1 FROM unexpected_scans e WHERE e.invoice_id=i.id AND e.counted>0) ELSE 0 END AS hasExtra`;
