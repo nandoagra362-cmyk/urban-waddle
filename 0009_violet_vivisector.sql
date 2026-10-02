@@ -1,0 +1,1 @@
+ALTER TABLE `invoices` ADD `completed_at` text;

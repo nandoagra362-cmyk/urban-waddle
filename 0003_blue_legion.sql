@@ -1,0 +1,2 @@
+ALTER TABLE `stores` ADD `cnpj` text DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE `stores` ADD `phone` text DEFAULT '' NOT NULL;

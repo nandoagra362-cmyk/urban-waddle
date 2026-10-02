@@ -1,0 +1,1 @@
+ALTER TABLE `buyer_stores` ADD `permission` text DEFAULT 'operate' NOT NULL;

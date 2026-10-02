@@ -1,0 +1,1 @@
+ALTER TABLE `invoices` ADD `checker_name` text DEFAULT '' NOT NULL;
